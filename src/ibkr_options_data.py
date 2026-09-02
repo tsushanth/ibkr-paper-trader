@@ -5,10 +5,9 @@ for free through Alpaca or yfinance. This is what could replace
 mm-backtester's synthetic_data.py generator with genuine historical
 options data, the gap flagged in that project's README since Phase 3.
 
-NOT RUN as part of this project -- no TWS/Gateway connection was
-available when this was written (same reason Phase 4 originally moved
-to Alpaca). Written to ib_insync's documented interface; treat as
-unverified until it's actually run against a live paper connection.
+Uses ib_async (the maintained fork of ib_insync -- the original is
+abandoned and breaks outright on Python 3.14's asyncio changes,
+confirmed by hitting that error directly before switching).
 """
 from dataclasses import dataclass
 from datetime import datetime
@@ -33,7 +32,7 @@ def fetch_historical_iv(host: str, port: int, client_id: int,
     once per (strike, expiry) pair you care about -- expect IBKR's
     pacing/rate limits to matter if pulling many contracts at once.
     """
-    from ib_insync import IB, Option
+    from ib_async import IB, Option
 
     ib = IB()
     ib.connect(host, port, clientId=client_id)
@@ -59,7 +58,7 @@ def fetch_option_chain_strikes(host: str, port: int, client_id: int, symbol: str
     call you'd make before deciding which (strike, expiry) pairs to
     pull historical IV for via fetch_historical_iv above.
     """
-    from ib_insync import IB, Stock
+    from ib_async import IB, Stock
 
     ib = IB()
     ib.connect(host, port, clientId=client_id)

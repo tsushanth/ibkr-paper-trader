@@ -12,33 +12,37 @@ untrustworthy results (100% win rate, Sharpe 28) precisely because no
 free real options-data source was available. This repo exists to close
 that gap, not to duplicate the pairs strategy Alpaca already runs.
 
-## Status: written, not yet run — needs your TWS/Gateway connection
+## Status: connected and verified end-to-end against a real IB Gateway paper account
 
-Same situation Phase 4 was originally in with IBKR: nothing here has
-connected to a live or paper IBKR account yet, because no TWS/Gateway
-instance was running when this was built.
+Uses **ib_async** (the maintained fork of ib_insync — the original is
+abandoned and fails outright on Python 3.14's asyncio changes; hit that
+error directly, switched rather than working around it).
 
-- **Real and tested:** `src/risk_gates.py` — copied from
-  alpaca-paper-trader, framework-independent, 6/6 unit tests passing.
-- **Written but not run:** `src/ibkr_adapter.py` (order execution) and
-  `src/ibkr_options_data.py` (historical IV fetcher) — both written to
-  ib_insync's documented interface, neither actually exercised yet.
+- **Real and tested:** `src/risk_gates.py` (6/6 unit tests) plus a real
+  connection test — order placed against the live paper account,
+  confirmed, cancelled, and an oversized order correctly blocked by the
+  risk gate before ever reaching IBKR.
+- **Port note, learned the hard way:** IB **Gateway**'s paper port is
+  **4002**, not TWS's 7497 — the two apps use different ports entirely.
+  This repo defaults to 4002 since Gateway (not full TWS) is what's
+  actually running for this project.
+- **Not yet exercised:** `src/ibkr_options_data.py` (historical IV
+  fetcher) — the connection works, but pulling a real IV series to feed
+  `mm-backtester` hasn't happened yet.
 
 ## First-run checklist
 
-1. Install TWS or IB Gateway, log into a **paper** account, enable API
-   access (Edit → Global Configuration → API → Settings, port 7497 for
-   paper TWS).
-2. `pip install -r requirements.txt`
+1. Install IB Gateway (lighter-weight than full TWS, recommended), log
+   into a **paper** account, enable API access (Configure → Settings →
+   API → Settings → check "Enable ActiveX and Socket Clients", confirm
+   port **4002** for Gateway paper — 7497 is TWS's port, not Gateway's).
+2. `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
 3. Confirm `ibkr_options_data.fetch_option_chain_strikes()` returns real
-   expirations/strikes for a liquid symbol (e.g. SPY) — this is the
-   first real signal the connection works.
+   expirations/strikes for a liquid symbol (e.g. SPY).
 4. Pull a small `fetch_historical_iv()` series for one strike/expiry,
-   confirm it's non-empty and the values look like plausible IV
-   (roughly 0.1–1.0, not garbage).
-5. Only then attempt a real order through `ibkr_adapter.py`'s
-   `GatedOrderRouter`, same pattern as alpaca-paper-trader's
-   `live_connection_check.py`.
+   confirm it's non-empty and plausible (roughly 0.1–1.0).
+5. ✅ Done — a real order through `ibkr_adapter.py`'s `GatedOrderRouter`
+   has been placed, confirmed, and cancelled against the paper account.
 
 ## Once real IV data is confirmed working
 

@@ -1,15 +1,12 @@
 """Thin adapter between the risk-gated order flow and Interactive
-Brokers' API, via ib_insync.
+Brokers' API, via ib_async (the maintained fork of ib_insync -- the
+original is abandoned and breaks outright on Python 3.14's asyncio
+changes, confirmed by actually hitting that error before switching).
 
-NOT RUN OR CONNECTED as part of this project -- there is no IBKR
-account/credentials available in the environment this was built in.
-This is written to the documented ib_insync interface and is a
-reasonable starting point, but treat it as unverified until it's
-actually been run against a paper account. See README's "first real run
-checklist" before trusting this code with even paper capital, let alone
-live.
+Connected and verified for real against a live IB Gateway paper account
+(see README) -- not just written to spec.
 
-ib_insync is imported lazily (inside functions, not at module load) so
+ib_async is imported lazily (inside functions, not at module load) so
 the rest of this package -- and its tests -- have zero dependency on it
 or on a running TWS/Gateway instance.
 """
@@ -20,14 +17,18 @@ from risk_gates import RiskGate, KillSwitchTripped
 
 class GatedOrderRouter:
     """Wraps IBKR order submission so every order passes through the
-    RiskGate first. Strategy code should never call ib_insync directly --
+    RiskGate first. Strategy code should never call ib_async directly --
     it should only ever go through this class.
     """
 
-    def __init__(self, risk_gate: RiskGate, host: str = "127.0.0.1", port: int = 7497, client_id: int = 1):
-        # port 7497 = TWS paper trading (7496 = TWS live, 4002/4001 = Gateway paper/live).
-        # Defaulting to the paper port is deliberate -- switching to a
-        # live port should be an explicit, reviewed change, not a default.
+    def __init__(self, risk_gate: RiskGate, host: str = "127.0.0.1", port: int = 4002, client_id: int = 1):
+        # Port depends on which app you're running, and they DIFFER --
+        # confirmed the hard way (7497 wasn't reachable; 4002 was):
+        #   TWS paper = 7497, TWS live = 7496
+        #   IB Gateway paper = 4002, IB Gateway live = 4001
+        # Defaulting to Gateway's paper port since that's what this
+        # project actually runs against. Switching to a live port
+        # should be an explicit, reviewed change, not a default.
         self.risk_gate = risk_gate
         self.host = host
         self.port = port
@@ -35,7 +36,7 @@ class GatedOrderRouter:
         self.ib = None
 
     def connect(self):
-        from ib_insync import IB
+        from ib_async import IB
         self.ib = IB()
         self.ib.connect(self.host, self.port, clientId=self.client_id)
         return self.ib
@@ -44,7 +45,7 @@ class GatedOrderRouter:
         if self.ib is None:
             raise RuntimeError("not connected -- call connect() first")
 
-        from ib_insync import Stock, LimitOrder
+        from ib_async import Stock, LimitOrder
 
         now = time.time()
         self.risk_gate.check_order(symbol, side, qty, limit_price, now)  # raises on breach
@@ -56,7 +57,7 @@ class GatedOrderRouter:
         return trade
 
     def on_fill(self, symbol: str, side: str, qty: float, fill_price: float, entry_price: float | None = None):
-        """Call this from an ib_insync fill-event callback to keep the
+        """Call this from an ib_async fill-event callback to keep the
         risk gate's position/pnl state in sync with reality.
         """
         self.risk_gate.record_fill(symbol, side, qty, fill_price, entry_price)
